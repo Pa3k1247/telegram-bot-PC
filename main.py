@@ -20,7 +20,7 @@ from pynvml import (
     nvmlDeviceGetName, nvmlDeviceGetMemoryInfo, nvmlDeviceGetTemperature,
     nvmlShutdown, NVML_TEMPERATURE_GPU
 )
-
+from fastapi import FastAPI, Request
 from googlesearch import search
 from contextvars import ContextVar
 from pathlib import Path
@@ -32,6 +32,17 @@ from dotenv import load_dotenv
 
 def is_executable(file_path):
     return os.path.isfile(file_path) and file_path.endswith('.exe')
+
+app = FastAPI()
+
+
+@app.post("/webhook/")
+async def handle_webhook(request: Request):
+    json_data = await request.json()
+    update = types.Update(**json_data)
+    await dp.process_update(update)
+    return {"status": "ok"}
+
 
 load_dotenv()
 AUTHORIZED_USERS = set()
