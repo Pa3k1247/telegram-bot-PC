@@ -4,6 +4,7 @@ import socket
 import logging
 from aiogram import F
 import json
+import requests
 import webbrowser
 from wakeonlan import send_magic_packet
 from aiogram import Bot, Dispatcher, types
@@ -62,6 +63,10 @@ user_states = {}
 
 STATE_WAITING_FOR_APP = "waiting_for_app"
 STATE_WAITING_FOR_SITE = "waiting_for_site"
+
+REGISTERED_DEVICES = { 
+# Пример MAC-адреса и соответствующего IP # Можно добавлять другие устройства
+}
 
 
 SITES_SYNONYMS = {
@@ -189,10 +194,6 @@ def search_file_on_disks(target_substring):
     return None
 
 def find_and_open_application(app_name):
-    """
-    Функция для поиска и запуска приложения.
-    Сначала ищет в кэше, затем в меню «Пуск», используя частичное совпадение.
-    """
     app_name = app_name.strip().lower()
 
     # Сначала проверим, есть ли приложение в кэше
@@ -448,9 +449,28 @@ async def cmd_shutdown(message: types.Message):
 
 # Обработчик команды /open_app
 @dp.message(Command("open_app"))
-async def cmd_open_app(message: types.Message, state: FSMContext):
-    await message.answer("Напишите название программы, которую хотите открыть:")
-    await state.set_state(UserState.waiting_for_app)
+async def cmd_open_app(message: types.Message):
+    # Получаем MAC-адрес из сообщения
+    mac_address = message.text.strip()
+
+    # Ищем IP-адрес по MAC-адресу
+    ip_address = REGISTERED_DEVICES.get(mac_address)
+    if not ip_address:
+        await message.answer("Этот MAC-адрес не зарегистрирован.")
+        return
+
+    # Пытаемся отправить запрос на локальный ПК
+    url = f"http://{ip_address}:5000/open_app"
+    try:
+        # Параметры запроса
+        app_name = "example_app"  # Имя приложения, которое нужно открыть
+        response = requests.post(url, json={"app_name": app_name})
+        
+        # Обработка ответа
+        result = response.json()
+        await message.answer(result.get("message", "Команда выполнена."))
+    except Exception as e:
+        await message.answer(f"Ошибка при отправке команды: {e}")
 
 @dp.message(UserState.waiting_for_app)
 async def handle_app_name(message: types.Message, state: FSMContext):
@@ -460,9 +480,6 @@ async def handle_app_name(message: types.Message, state: FSMContext):
     await state.clear()
 
 def normalize_site_name(site_name):
-    """
-    Нормализует название сайта, превращая его в нижний регистр.
-    """
     site_name = site_name.strip().lower()
     for key, synonyms in SITES_SYNONYMS.items():
         if site_name in synonyms:
