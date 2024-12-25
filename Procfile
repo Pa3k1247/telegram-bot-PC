@@ -1,1 +1,1 @@
-worker: python server-agent.py
+worker: python main.py
