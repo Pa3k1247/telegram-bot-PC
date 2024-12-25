@@ -27,6 +27,7 @@ from pathlib import Path
 class UserState(StatesGroup):
     waiting_for_app = State()
     waiting_for_site = State()
+    waiting_for_mac = State()
 from dotenv import load_dotenv
 
 
@@ -34,7 +35,6 @@ def is_executable(file_path):
     return os.path.isfile(file_path) and file_path.endswith('.exe')
 
 app = FastAPI()
-
 
 load_dotenv()
 AUTHORIZED_USERS = set()
@@ -48,6 +48,7 @@ waiting_for_pid = {}
 
 STATE_WAITING_FOR_SITE = "waiting_for_site"
 STATE_WAITING_FOR_APP = "waiting_for_app"
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +71,50 @@ SITES_SYNONYMS = {
     "instagram": ["instagram", "инстаграм", "инста"],
     # Добавьте другие сайты по аналогии
 }
+
+
+# Обработчик команды /start
+def is_valid_mac_address(mac_address: str) -> bool:
+    # Заменяем дефисы на двоеточия
+    mac_address = mac_address.replace("-", ":")
+    
+    # Проверяем, что MAC-адрес состоит из 17 символов и 5 двоеточий
+    if len(mac_address) == 17 and mac_address.count(":") == 5:
+        parts = mac_address.split(":")
+        # Проверяем, что каждый компонент является двухсимвольным шестнадцатеричным числом
+        for part in parts:
+            if len(part) != 2 or not all(c in '0123456789ABCDEFabcdef' for c in part):
+                return False
+        return True
+    return False
+
+
+# Обработчик команды /start
+
+
+# Обработчик команды /register
+@dp.message(Command("register"))
+async def cmd_register(message: types.Message, state: FSMContext):
+    await message.answer("Введите MAC-адрес вашего ПК:")
+    await state.set_state(UserState.waiting_for_mac)
+
+# Обработчик ввода MAC-адреса
+@dp.message(UserState.waiting_for_mac)
+async def handle_mac_address(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    mac_address = message.text.strip()
+
+    # Проверка на корректность MAC-адреса
+    if is_valid_mac_address(mac_address):
+        # Сохраняем MAC-адрес
+        user_data[user_id] = {
+            'mac_address': mac_address,
+            'pc_name': f"ПК пользователя {user_id}",
+        }
+        await message.answer(f"Ваш ПК с MAC-адресом {mac_address} успешно зарегистрирован!")
+        await state.clear()
+    else:
+        await message.answer("Неверный формат MAC-адреса. Пожалуйста, убедитесь, что он имеет формат XX:XX:XX:XX:XX:XX.")
 
 
 def get_mac_address():
@@ -193,18 +238,6 @@ def find_and_open_application(app_name):
     return f"❌ Приложение '{app_name}' не найдено."
 
 
-
-
-def find_steam_path():
-    if "steam" in game_paths:
-        return game_paths["steam"]
-    print("[LOG] Ищу Steam на всех дисках...")
-    path = search_file_on_disks("steam.exe")
-    if path:
-        game_paths["steam"] = path
-        save_cache()
-        return path
-    return None
 
 
 def kill_process_by_pid(pid):
@@ -360,31 +393,34 @@ async def cmd_status(message: types.Message):
 
 async def send_welcome(message: types.Message):
     user_id = message.from_user.id
-    if user_id not in AUTHORIZED_USERS:
-        AUTHORIZED_USERS.add(user_id)
-        print(f"[LOG] Пользователь {user_id} добавлен в список авторизованных.")
-    await message.answer(
-        "🔧 <b>Добро пожаловать!</b>\n"
-        "Я бот для управления компьютером. Вот что я умею:\n\n"
-        "🖥️ <b>Команды управления ПК:</b>\n"
-        "• 🟢 <b>/wake</b> — Включить ПК (Wake-on-LAN).\n"
-        "• 🔴 <b>/shutdown</b> — Выключить ПК.\n"
-        "• 🛠️ <b>/status</b> — Проверить состояние компьютера (процессор, память, сеть).\n\n"
-        "📂 <b>Работа с файлами и приложениями:</b>\n"
-        "• 🛑 <b>/close</b> — закрыть приложение.\n"
-        "• 🎮 <b>/open_steam</b> — Открыть Steam.\n"
-        "• 💻 <b>/open_app</b> — Открыть приложение.\n"
-        "• 🌐 <b>/open_site</b> — Открыть сайт.\n"
-        "• 📂 <b>/files</b> — Управление файлами (просмотр, копирование, удаление).\n\n"
-        "⚙️ <b>Процессы:</b>\n"
-        "• 🛠️ <b>/processes</b> — Показать список запущенных .exe процессов.\n\n"
-        "• 🛑 <b>/kill_process</b> — введи пид.\n\n"
-        "ℹ️ <b>Прочее:</b>\n"
-        "• ℹ️ <b>/help</b> — Получить справку по командам.\n\n"
-        "🔐 <b>Ваш ID добавлен автоматически.</b>\n"
-        "Для вопросов и предложений обращайтесь к администратору.",
-        parse_mode="HTML"
-    )
+    if user_id not in user_data:
+        # Если MAC-адрес не зарегистрирован, запросим его
+        await message.answer("🔧 <b>Добро пожаловать!</b>\nЯ бот для управления вашим ПК. Пожалуйста, зарегистрируйте MAC-адрес вашего ПК с помощью команды <b>/register</b>.")
+        return
+    else:
+        await message.answer(
+            "🔧 <b>Добро пожаловать!</b>\n"
+            "Я бот для управления компьютером. Вот что я умею:\n\n"
+            "🖥️ <b>Команды управления ПК:</b>\n"
+            "• 🟢 <b>/wake</b> — Включить ПК (Wake-on-LAN).\n"
+            "• 🔴 <b>/shutdown</b> — Выключить ПК.\n"
+            "• 🛠️ <b>/status</b> — Проверить состояние компьютера (процессор, память, сеть).\n\n"
+            "📂 <b>Работа с файлами и приложениями:</b>\n"
+            "• 🛑 <b>/close</b> — закрыть приложение.\n"
+            "• 🎮 <b>/open_steam</b> — Открыть Steam.\n"
+            "• 💻 <b>/open_app</b> — Открыть приложение.\n"
+            "• 🌐 <b>/open_site</b> — Открыть сайт.\n"
+            "• 📂 <b>/files</b> — Управление файлами (просмотр, копирование, удаление).\n\n"
+            "⚙️ <b>Процессы:</b>\n"
+            "• 🛠️ <b>/processes</b> — Показать список запущенных .exe процессов.\n\n"
+            "• 🛑 <b>/kill_process</b> — введи пид.\n\n"
+            "ℹ️ <b>Прочее:</b>\n"
+            "• ℹ️ <b>/help</b> — Получить справку по командам.\n\n"
+            "🔐 <b>Ваш ID добавлен автоматически.</b>\n"
+            "Для вопросов и предложений обращайтесь к администратору.",
+            parse_mode="HTML"
+        )
+
 
 async def cmd_wake(message: types.Message):
     user_id = message.from_user.id
@@ -412,19 +448,6 @@ async def cmd_shutdown(message: types.Message):
     else:
         await message.answer("⛔ У вас нет прав для выполнения этой команды.", parse_mode="Markdown")
 
-# Обработчик команды /open_steam
-async def cmd_open_steam(message: types.Message):
-    user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
-        try:
-            steam_path = find_steam_path()
-            if steam_path:
-                process = await asyncio.create_subprocess_exec(steam_path)
-                await message.answer("🎮 Steam запущен!", parse_mode="Markdown")
-            else:
-                await message.answer("❌ Не удалось найти Steam на компьютере.", parse_mode="Markdown")
-        except Exception as e:
-            await message.answer(f"❌ Ошибка: {e}", parse_mode="Markdown")
 
 # Обработчик команды /open_app
 @dp.message(Command("open_app"))
@@ -531,7 +554,6 @@ def register_commands(dp: Dispatcher):
     dp.message.register(send_welcome, Command("start"))
     dp.message.register(cmd_wake, Command("wake"))
     dp.message.register(cmd_shutdown, Command("shutdown"))
-    dp.message.register(cmd_open_steam, Command("open_steam"))
     dp.message.register(cmd_open_app, Command("open_app"))
     dp.message.register(cmd_processes, Command("processes"))
     dp.message.register(cmd_kill_process, Command("kill_process"))
