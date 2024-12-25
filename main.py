@@ -62,7 +62,7 @@ user_states = {}
 
 STATE_WAITING_FOR_APP = "waiting_for_app"
 STATE_WAITING_FOR_SITE = "waiting_for_site"
-AUTHORIZED_USERS = set()
+
 
 SITES_SYNONYMS = {
     "youtube": ["youtube", "ютуб", "youtub", "ютюб"],
@@ -170,9 +170,6 @@ def search_in_start_menu(app_name):
     return None
 
 def search_file_on_disks(target_substring):
-    """
-    Поиск файла на дисках с учетом части названия.
-    """
     target_substring = target_substring.lower()
     extensions = ['.exe', '.bat', '.cmd', '.lnk']  # Поддерживаемые расширения
     for disk in "CDEFG":  # Перебор дисков
@@ -278,7 +275,7 @@ def get_running_exe_processes():
 
 async def cmd_kill_process(message: types.Message):
     user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
+    if user_id in user_data:
         await message.answer(
             "❓ Напишите PID процесса, который вы хотите завершить.\n"
             "Чтобы узнать список процессов, используйте команду /processes.",
@@ -305,7 +302,7 @@ async def handle_kill_pid(message: types.Message):
 
 async def cmd_processes(message: types.Message):
     user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
+    if user_id in user_data:
         processes_list = get_running_exe_processes()
         await message.answer(processes_list, parse_mode="HTML")
     else:
@@ -385,7 +382,7 @@ def get_pc_status():
 
 async def cmd_status(message: types.Message):
     user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
+    if user_id in user_data:
         pc_status = get_pc_status()
         await message.answer(pc_status, parse_mode="HTML")
     else:
@@ -393,8 +390,7 @@ async def cmd_status(message: types.Message):
 
 async def send_welcome(message: types.Message):
     user_id = message.from_user.id
-    if user_id not in AUTHORIZED_USERS:
-        AUTHORIZED_USERS.add(user_id)
+    if user_id not in user_data:
         # Если MAC-адрес не зарегистрирован, запросим его
         await message.answer("🔧 <b>Добро пожаловать!</b>\nЯ бот для управления вашим ПК. Пожалуйста, зарегистрируйте MAC-адрес вашего ПК с помощью команды /register.")
         return
@@ -425,7 +421,7 @@ async def send_welcome(message: types.Message):
 
 async def cmd_wake(message: types.Message):
     user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
+    if user_id in user_data:
         try:
             mac_address = get_mac_address()
             if mac_address:
@@ -440,7 +436,7 @@ async def cmd_wake(message: types.Message):
 
 async def cmd_shutdown(message: types.Message):
     user_id = message.from_user.id
-    if user_id in AUTHORIZED_USERS:
+    if user_id in user_data:
         try:
             subprocess.run(["shutdown", "/s", "/f", "/t", "0"])  # Команда для выключения компьютера
             await message.answer("🔴 Компьютер выключается...", parse_mode="Markdown")
