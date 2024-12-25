@@ -36,14 +36,6 @@ def is_executable(file_path):
 app = FastAPI()
 
 
-@app.post("/webhook/")
-async def handle_webhook(request: Request):
-    json_data = await request.json()
-    update = types.Update(**json_data)
-    await dp.process_update(update)
-    return {"status": "ok"}
-
-
 load_dotenv()
 AUTHORIZED_USERS = set()
 CACHE_FILE = "cache.json"
