@@ -37,15 +37,18 @@ app = Flask(__name__)
 
 REGISTERED_DEVICES = {}
 
+app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def index():
+    return "This is the home page."
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    print("Received data:", data)
-    return {"status": "ok"}, 200
+    return {"status": "received", "data": data}, 200
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
 
 
 
@@ -609,6 +612,7 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000)
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
